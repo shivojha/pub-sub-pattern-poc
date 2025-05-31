@@ -215,24 +215,25 @@ dotnet test
    - Consider handler execution time
    - Monitor memory usage
 
-## Future Improvements
-
-1. **Event Versioning**
+5. **Event Versioning**
    - Add version information to events
    - Support for event schema evolution
    - Backward compatibility handling
 
-2. **Event Filtering and Routing**
+## Future Improvements
+
+
+1. **Event Filtering and Routing**
    - Add support for event filtering
    - Implement event routing based on criteria
    - Support for event transformation
 
-3. **Monitoring and Metrics**
+2. **Monitoring and Metrics**
    - Add performance metrics
    - Track event processing times
    - Monitor handler success/failure rates
 
-4. **Persistence**
+3. **Persistence**
    - Add event persistence for audit trail
    - Support for event replay
    - Event store integration

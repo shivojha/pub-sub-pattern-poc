@@ -25,12 +25,21 @@ try
     var handler1 = serviceProvider.GetRequiredService<OrderPlacedEventHandler>();
     var handler2 = serviceProvider.GetRequiredService<OrderPlacedEventHandler2>();
 
-    eventAggregator.Subscribe<OrderPlacedEvent>(async @event => await handler1.HandleAsync(@event));
-    eventAggregator.Subscribe<OrderPlacedEvent>(async @event => await handler2.HandleAsync(@event));
+    // Subscribe handlers to BaseEvent to receive all versions
+    eventAggregator.Subscribe<BaseEvent>(async @event => await handler1.HandleAsync(@event));
+    eventAggregator.Subscribe<BaseEvent>(async @event => await handler2.HandleAsync(@event));
 
-    // Publish an event
-    var orderEvent = new OrderPlacedEvent("12345", "C001", DateTime.Now);
-    await eventAggregator.PublishAsync(orderEvent);
+    // Publish a Version 1 event
+    logger.LogInformation("Publishing OrderPlacedEvent (Version 1)...");
+    var orderEventV1 = new OrderPlacedEvent("12345", "C001", DateTime.Now);
+    await eventAggregator.PublishAsync(orderEventV1);
+
+    Console.WriteLine("-----------------------------------------");
+
+    // Publish a Version 2 event
+    logger.LogInformation("Publishing OrderPlacedEventV2 (Version 2)...");
+    var orderEventV2 = new OrderPlacedEventV2("67890", "C002", DateTime.UtcNow, "123 Main St, Anytown, USA");
+    await eventAggregator.PublishAsync(orderEventV2);
 
     logger.LogInformation("End of program execution. Press any key to exit.");
     Console.ReadLine();
