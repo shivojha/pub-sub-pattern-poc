@@ -18,12 +18,12 @@ public class EventAggregator : IEventAggregator
     // Dictionary to store event transformers: SourceType -> List<(TargetType, TransformerFunc)>>
     private readonly Dictionary<Type, List<(Type TargetType, object Transformer)>> _transformers = new();
 
-    // List to store all published events for auditing
-    private readonly List<BaseEvent> _eventAuditLog = new List<BaseEvent>();
+    private readonly IEventStore _eventStore;
 
-    public EventAggregator(ILogger<EventAggregator> logger)
+    public EventAggregator(ILogger<EventAggregator> logger, IEventStore eventStore)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _eventStore = eventStore ?? throw new ArgumentNullException(nameof(eventStore));
     }
 
     // Modified Subscribe method to accept a minimumVersion and an optional filter
@@ -56,14 +56,11 @@ public class EventAggregator : IEventAggregator
         if (eventMessage == null)
             throw new ArgumentNullException(nameof(eventMessage));
 
-        // Add the event to the audit log only if it's not a replay
+        // Persist the event using the event store only if it's not a replay
         if (!isReplay)
         {
-            lock (_lock)
-            {
-                _eventAuditLog.Add(eventMessage);
-            }
-            _logger.LogInformation("Event {EventType} (version {EventVersion}) added to audit log. Total events: {EventCount}", eventMessage.GetType().Name, eventMessage.Version, _eventAuditLog.Count);
+            await _eventStore.AppendAsync(eventMessage);
+            _logger.LogInformation("Event {EventType} (version {EventVersion}) persisted to event store.", eventMessage.GetType().Name, eventMessage.Version);
         }
         else
         {
@@ -261,16 +258,11 @@ public class EventAggregator : IEventAggregator
 
     public async Task ReplayEventsAsync()
     {
-        _logger.LogInformation("Starting event replay from in-memory audit log. Total events: {EventCount}", _eventAuditLog.Count);
+        _logger.LogInformation("Starting event replay from event store.");
 
-        List<BaseEvent> eventsToReplay;
-        lock (_lock)
-        {
-            // Create a copy of the audit log to avoid issues if new events are published during replay
-            eventsToReplay = new List<BaseEvent>(_eventAuditLog);
-        }
-
-        foreach (var eventToReplay in eventsToReplay)
+        // Read events from the event store (assuming a single stream for simplicity)
+        // In a real application, you might read from specific streams or with filters.
+        await foreach (var eventToReplay in _eventStore.ReadEventsAsync("global-stream", 0))
         {
             // Use the non-generic PublishInternalAsync to handle different event types
             // We need to call the internal method with isReplay set to true
@@ -279,6 +271,7 @@ public class EventAggregator : IEventAggregator
             
             // Create a new HashSet for each replay to avoid infinite loops within the replay of a single event
             // Pass isReplay as true
+            // Pass a new HashSet<Type>() for each event replay to avoid issues if replaying the same event type multiple times
             await (Task)publishMethod.MakeGenericMethod(eventToReplay.GetType())
                                     .Invoke(this, new object[] { eventToReplay, new HashSet<Type>(), true });
         }

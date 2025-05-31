@@ -7,16 +7,16 @@ using Moq;
 namespace PubSubPattern.Tests
 {
     [TestClass]
-    public class OrderPlacedEventHandlerTests
+    public class OrderPlacedEventHandler2Tests
     {
-        private Mock<ILogger<OrderPlacedEventHandler>> _loggerMock;
-        private OrderPlacedEventHandler _handler;
+        private Mock<ILogger<OrderPlacedEventHandler2>> _loggerMock;
+        private OrderPlacedEventHandler2 _handler;
 
         [TestInitialize]
         public void Initialize()
         {
-            _loggerMock = new Mock<ILogger<OrderPlacedEventHandler>>();
-            _handler = new OrderPlacedEventHandler(_loggerMock.Object);
+            _loggerMock = new Mock<ILogger<OrderPlacedEventHandler2>>();
+            _handler = new OrderPlacedEventHandler2(_loggerMock.Object);
         }
 
         [TestMethod]
@@ -82,6 +82,35 @@ namespace PubSubPattern.Tests
                     LogLevel.Error,
                     It.IsAny<EventId>(),
                     It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("Error processing event of type OrderPlacedEvent")),
+                    It.IsAny<Exception>(),
+                    It.IsAny<Func<It.IsAnyType, Exception, string>>()),
+                Times.Once);
+        }
+
+         [TestMethod]
+        public async Task HandleAsync_WithValidV2Event_ProcessesSuccessfully()
+        {
+            // Arrange
+            var orderEvent = new OrderPlacedEventV2("123", "C001", DateTime.Now, "USA Address");
+
+            // Act
+            await _handler.HandleAsync(orderEvent);
+
+            // Assert
+            _loggerMock.Verify(
+                x => x.Log(
+                    LogLevel.Information,
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("Processing OrderPlacedEventV2 event (Version 2)")),
+                    It.IsAny<Exception>(),
+                    It.IsAny<Func<It.IsAnyType, Exception, string>>()),
+                Times.Once);
+
+            _loggerMock.Verify(
+                x => x.Log(
+                    LogLevel.Information,
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("Successfully processed OrderPlacedEventV2 event (Version 2)")),
                     It.IsAny<Exception>(),
                     It.IsAny<Func<It.IsAnyType, Exception, string>>()),
                 Times.Once);

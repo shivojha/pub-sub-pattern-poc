@@ -11,12 +11,14 @@ namespace PubSubPattern.Tests
     {
         private Mock<ILogger<EventAggregator>> _loggerMock;
         private IEventAggregator _eventAggregator;
+        private Mock<IEventStore> _eventStoreMock;
 
         [TestInitialize]
         public void Initialize()
         {
             _loggerMock = new Mock<ILogger<EventAggregator>>();
-            _eventAggregator = new EventAggregator(_loggerMock.Object);
+            _eventStoreMock = new Mock<IEventStore>();
+            _eventAggregator = new EventAggregator(_loggerMock.Object, _eventStoreMock.Object);
         }
 
         [TestMethod]
@@ -155,7 +157,7 @@ namespace PubSubPattern.Tests
         }
 
         [TestMethod]
-        public void Unsubscribe_WithValidAction_UnsubscribesSuccessfully()
+        public async Task Unsubscribe_WithValidAction_UnsubscribesSuccessfully()
         {
             // Arrange
             var actionCalled = false;
@@ -165,7 +167,7 @@ namespace PubSubPattern.Tests
             _eventAggregator.Unsubscribe(action);
 
             // Act
-            _eventAggregator.PublishAsync(new OrderPlacedEvent("123", "C001", DateTime.Now)).Wait();
+            await _eventAggregator.PublishAsync(new OrderPlacedEvent("123", "C001", DateTime.Now));
 
             // Assert
             Assert.IsFalse(actionCalled);
@@ -173,7 +175,7 @@ namespace PubSubPattern.Tests
                 x => x.Log(
                     LogLevel.Information,
                     It.IsAny<EventId>(),
-                    It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("Unsubscribed from event type")),
+                    It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("Unsubscribed delegate from event type")),
                     It.IsAny<Exception>(),
                     It.IsAny<Func<It.IsAnyType, Exception, string>>()),
                 Times.Once);

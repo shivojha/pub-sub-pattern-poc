@@ -26,14 +26,21 @@ classDiagram
         +Subscribe<T>(Action<T>)
         +PublishAsync<T>(T)
         +Unsubscribe<T>(Action<T>)
+        +RegisterTransformer<TS, TT>(Func<TS, TT>)
+        +ReplayEventsAsync()
     }
     
     class EventAggregator {
         -ILogger _logger
         -Dictionary _subscriptions
+        -Dictionary _transformers
+        -IEventStore _eventStore
+        +EventAggregator(ILogger, IEventStore)
         +Subscribe<T>(Action<T>)
         +PublishAsync<T>(T)
         +Unsubscribe<T>(Action<T>)
+        +RegisterTransformer<TS, TT>(Func<TS, TT>)
+        +ReplayEventsAsync()
     }
     
     class IEventHandler~T~ {
@@ -41,20 +48,32 @@ classDiagram
         +HandleAsync(T)
     }
     
-    class OrderPlacedEventHandler {
-        -ILogger _logger
-        +HandleAsync(OrderPlacedEvent)
+    class BaseEvent {
+        <<abstract>>
+        +int Version
     }
-    
-    class OrderPlacedEvent {
-        +string OrderId
-        +string CustomerId
-        +DateTime OrderDate
+
+    class OrderPlacedEvent
+    class OrderPlacedEventV2
+
+    class IEventStore {
+        <<interface>>
+        +AppendAsync(BaseEvent)
+        +ReadEventsAsync(string, long)
+    }
+
+    class InMemoryEventStore {
+        +AppendAsync(BaseEvent)
+        +ReadEventsAsync(string, long)
     }
     
     IEventAggregator <|.. EventAggregator
     IEventHandler <|.. OrderPlacedEventHandler
-    OrderPlacedEventHandler ..> OrderPlacedEvent
+    IEventHandler <|.. OrderPlacedEventHandler2
+    BaseEvent <|-- OrderPlacedEvent
+    BaseEvent <|-- OrderPlacedEventV2
+    EventAggregator --> IEventStore : depends on
+    IEventStore <|.. InMemoryEventStore
 ```
 
 ## Features
@@ -65,6 +84,10 @@ classDiagram
 - **Logging**: Comprehensive logging using Microsoft.Extensions.Logging
 - **Error Handling**: Robust error handling and exception management
 - **Interface-based Design**: Clean interfaces for better testability and maintainability
+- **Event Versioning**: Support for event schema evolution and backward compatibility
+- **Event Filtering and Routing**: Route events to specific handlers based on criteria
+- **Event Transformation**: Transform events from one version/type to another
+- **Monitoring and Metrics**: Basic tracking of handler execution time and success/failure
 
 ## Getting Started
 
@@ -100,12 +123,12 @@ await eventAggregator.PublishAsync(orderEvent);
 
 ```csharp
 // Subscribe multiple handlers
-eventAggregator.Subscribe<OrderPlacedEvent>(async @event => 
+eventAggregator.Subscribe<BaseEvent>(async @event => 
     await handler1.HandleAsync(@event));
-eventAggregator.Subscribe<OrderPlacedEvent>(async @event => 
+eventAggregator.Subscribe<BaseEvent>(async @event => 
     await handler2.HandleAsync(@event));
 
-// All handlers will be notified when event is published
+// All handlers interested in BaseEvent will be notified when event is published
 await eventAggregator.PublishAsync(orderEvent);
 ```
 
@@ -124,7 +147,28 @@ services.AddLogging(builder =>
 // Register services
 services.AddSingleton<IEventAggregator, EventAggregator>();
 services.AddTransient<OrderPlacedEventHandler>();
+services.AddTransient<OrderPlacedEventHandler2>();
+// Register event store implementation
+services.AddSingleton<IEventStore, InMemoryEventStore>();
 ```
+
+## Persistence with Event Store
+
+For a production-ready system, persisting events to a dedicated event store is crucial for auditability, reliability, and advanced features like event replay and event sourcing.
+
+### Approach
+
+This implementation can be extended to integrate with an event store by introducing an `IEventStore` interface and a concrete implementation that interacts with the chosen event store technology (e.g., EventStoreDB, Kafka, or a file-based store for simpler scenarios). The `EventAggregator` will be modified to use this `IEventStore` to persist events before dispatching them to handlers and to read events from the store for replay.
+
+### Benefits
+
+Integrating a dedicated event store provides several key benefits:
+
+*   **Durable Audit Trail:** Events are stored reliably as an immutable log, providing a complete history of everything that happened in the system.
+*   **Event Replay:** Enables re-processing of past events for debugging, state rebuilding, or projections.
+*   **Decoupling:** Decouples the event processing logic from the storage mechanism.
+*   **Scalability and Performance:** Dedicated event stores are optimized for high-volume event ingestion and querying.
+*   **Support for Event Sourcing:** Forms the foundation for implementing event sourcing patterns.
 
 ## Unit Testing
 
@@ -136,6 +180,9 @@ The project includes comprehensive unit tests using MSTest and Moq. The tests co
 - Multiple subscriber handling
 - Error handling and logging
 - Unsubscription functionality
+- Event versioning and filtering
+- Event transformation
+- Event replay (using a mock event store)
 
 Example test:
 ```csharp
@@ -164,6 +211,7 @@ public async Task PublishAsync_WithMultipleSubscribers_CallsAllSubscribers()
 - Error handling
 - Logging verification
 - Null event handling
+- Handling different event versions
 
 Example test:
 ```csharp
@@ -215,26 +263,8 @@ dotnet test
    - Consider handler execution time
    - Monitor memory usage
 
-5. **Event Versioning**
-   - Add version information to events
-   - Support for event schema evolution
-   - Backward compatibility handling
-
-6. **Event Filtering and Routing**
-   - Add support for event filtering
-   - Implement event routing based on criteria
-   - Support for event transformation
-
-7. **Monitoring and Metrics**
-   - Add performance metrics
-   - Track event processing times
-   - Monitor handler success/failure rates
-
 ## Future Improvements
-1. **Persistence**
-   - Add event persistence for audit trail
-   - Support for event replay
-   - Event store integration
+*(Moved the Persistence points to a new section)*
 
 ## Contributing
 
