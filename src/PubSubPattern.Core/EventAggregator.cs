@@ -18,6 +18,9 @@ public class EventAggregator : IEventAggregator
     // Dictionary to store event transformers: SourceType -> List<(TargetType, TransformerFunc)>>
     private readonly Dictionary<Type, List<(Type TargetType, object Transformer)>> _transformers = new();
 
+    // List to store all published events for auditing
+    private readonly List<BaseEvent> _eventAuditLog = new List<BaseEvent>();
+
     public EventAggregator(ILogger<EventAggregator> logger)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -52,6 +55,13 @@ public class EventAggregator : IEventAggregator
     {
         if (eventMessage == null)
             throw new ArgumentNullException(nameof(eventMessage));
+
+        // Add the event to the audit log (thread-safe)
+        lock (_lock)
+        {
+            _eventAuditLog.Add(eventMessage);
+        }
+        _logger.LogInformation("Event {EventType} (version {EventVersion}) added to audit log. Total events: {EventCount}", eventMessage.GetType().Name, eventMessage.Version, _eventAuditLog.Count);
 
         var eventType = eventMessage.GetType();
 
