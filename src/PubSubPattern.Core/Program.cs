@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using EventStore.Client;
 
 var services = new ServiceCollection();
 
@@ -10,12 +11,22 @@ services.AddLogging(builder =>
     builder.SetMinimumLevel(LogLevel.Information);
 });
 
+// Configure EventStoreDB client
+var eventStoreSettings = new EventStoreClientSettings
+{
+    ConnectivitySettings = new EventStoreClientConnectivitySettings
+    {
+        Address = new Uri("esdb://localhost:2113?tls=false") // Update with your EventStoreDB connection string
+    }
+};
+services.AddSingleton(new EventStoreClient(eventStoreSettings));
+
 // Register services
 services.AddSingleton<IEventAggregator, EventAggregator>();
 services.AddTransient<OrderPlacedEventHandler>();
 services.AddTransient<OrderPlacedEventHandler2>();
-// Register the InMemoryEventStore implementation for IEventStore
-services.AddSingleton<IEventStore, InMemoryEventStore>();
+// Register the EventStoreDB implementation for IEventStore
+services.AddSingleton<IEventStore, EventStoreDBEventStore>();
 
 var serviceProvider = services.BuildServiceProvider();
 var eventAggregator = serviceProvider.GetRequiredService<IEventAggregator>();
