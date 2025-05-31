@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("pub-sub-pattern-poc")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+64bd4cf881552cfa32f4b9b8b92cfe53096c1d92")]
 [assembly: System.Reflection.AssemblyProductAttribute("pub-sub-pattern-poc")]
 [assembly: System.Reflection.AssemblyTitleAttribute("pub-sub-pattern-poc")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
