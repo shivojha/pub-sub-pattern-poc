@@ -57,6 +57,13 @@ try
     var orderEventV2_non_usa = new OrderPlacedEventV2("98765", "C003", DateTime.UtcNow, "456 Oak Ave, Toronto, Canada");
     await eventAggregator.PublishAsync(orderEventV2_non_usa);
 
+    Console.WriteLine("-----------------------------------------");
+
+    // Demonstrate event replay
+    logger.LogInformation("Starting event replay...");
+    await eventAggregator.ReplayEventsAsync();
+    logger.LogInformation("Event replay completed.");
+
     logger.LogInformation("End of program execution. Press any key to exit.");
     Console.ReadLine();
 }

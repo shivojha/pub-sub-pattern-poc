@@ -47,21 +47,28 @@ public class EventAggregator : IEventAggregator
 
     public async Task PublishAsync<T>(T eventMessage) where T : BaseEvent
     {
-        // Initial call, create a new set of processed types
-        await PublishInternalAsync(eventMessage, new HashSet<Type>());
+        // Initial call, create a new set of processed types and set isReplay to false
+        await PublishInternalAsync(eventMessage, new HashSet<Type>(), isReplay: false);
     }
 
-    private async Task PublishInternalAsync<T>(T eventMessage, HashSet<Type> processedTypes) where T : BaseEvent
+    private async Task PublishInternalAsync<T>(T eventMessage, HashSet<Type> processedTypes, bool isReplay) where T : BaseEvent
     {
         if (eventMessage == null)
             throw new ArgumentNullException(nameof(eventMessage));
 
-        // Add the event to the audit log (thread-safe)
-        lock (_lock)
+        // Add the event to the audit log only if it's not a replay
+        if (!isReplay)
         {
-            _eventAuditLog.Add(eventMessage);
+            lock (_lock)
+            {
+                _eventAuditLog.Add(eventMessage);
+            }
+            _logger.LogInformation("Event {EventType} (version {EventVersion}) added to audit log. Total events: {EventCount}", eventMessage.GetType().Name, eventMessage.Version, _eventAuditLog.Count);
         }
-        _logger.LogInformation("Event {EventType} (version {EventVersion}) added to audit log. Total events: {EventCount}", eventMessage.GetType().Name, eventMessage.Version, _eventAuditLog.Count);
+        else
+        {
+             _logger.LogInformation("Processing replayed event {EventType} (version {EventVersion})", eventMessage.GetType().Name, eventMessage.Version);
+        }
 
         var eventType = eventMessage.GetType();
 
@@ -194,7 +201,7 @@ public class EventAggregator : IEventAggregator
                     if (transformedEvent is BaseEvent transformedBaseEvent)
                     {
                          _logger.LogInformation("Applying transformation from {SourceType} to {TargetType}", eventType.Name, targetType.Name);
-                         await PublishInternalAsync(transformedBaseEvent, processedTypes);
+                         await PublishInternalAsync(transformedBaseEvent, processedTypes, isReplay);
                     }
                     else
                     {
@@ -251,6 +258,33 @@ public class EventAggregator : IEventAggregator
             _logger.LogInformation("Registered transformer from {SourceType} to {TargetType}", sourceType.Name, typeof(TTarget).Name);
         }
     }
+
+    public async Task ReplayEventsAsync()
+    {
+        _logger.LogInformation("Starting event replay from in-memory audit log. Total events: {EventCount}", _eventAuditLog.Count);
+
+        List<BaseEvent> eventsToReplay;
+        lock (_lock)
+        {
+            // Create a copy of the audit log to avoid issues if new events are published during replay
+            eventsToReplay = new List<BaseEvent>(_eventAuditLog);
+        }
+
+        foreach (var eventToReplay in eventsToReplay)
+        {
+            // Use the non-generic PublishInternalAsync to handle different event types
+            // We need to call the internal method with isReplay set to true
+            var publishMethod = typeof(EventAggregator).GetMethod("PublishInternalAsync", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            
+            // Create a new HashSet for each replay to avoid infinite loops within the replay of a single event
+            // Pass isReplay as true
+            await (Task)publishMethod.MakeGenericMethod(eventToReplay.GetType())
+                                    .Invoke(this, new object[] { eventToReplay, new HashSet<Type>(), true });
+        }
+
+        _logger.LogInformation("Event replay completed.");
+    }
 }
 
 public interface IEventAggregator
@@ -261,4 +295,5 @@ public interface IEventAggregator
     void RegisterTransformer<TSource, TTarget>(Func<TSource, TTarget> transformer) 
         where TSource : BaseEvent
         where TTarget : BaseEvent;
+    Task ReplayEventsAsync();
 }
