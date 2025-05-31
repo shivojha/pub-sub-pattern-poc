@@ -2,7 +2,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "pub-sub-pattern-poc", "pub-sub-pattern-poc\pub-sub-pattern-poc.csproj", "{52716DB6-534F-2FF7-8444-D213BC89E7EB}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PubSubPattern.Core", "src\PubSubPattern.Core\pub-sub-pattern-poc.csproj", "{52716DB6-534F-2FF7-8444-D213BC89E7EB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PubSubPattern.Tests", "test\PubSubPattern.Tests\PubSubPattern.Tests.csproj", "{A1B2C3D4-5678-90AB-CDEF-1234567890AB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -14,6 +16,10 @@ Global
 		{52716DB6-534F-2FF7-8444-D213BC89E7EB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{52716DB6-534F-2FF7-8444-D213BC89E7EB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{52716DB6-534F-2FF7-8444-D213BC89E7EB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A1B2C3D4-5678-90AB-CDEF-1234567890AB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A1B2C3D4-5678-90AB-CDEF-1234567890AB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A1B2C3D4-5678-90AB-CDEF-1234567890AB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A1B2C3D4-5678-90AB-CDEF-1234567890AB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

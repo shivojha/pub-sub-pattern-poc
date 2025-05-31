@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\pub-sub-pattern-poc.csproj" />
+    <ProjectReference Include="..\..\src\PubSubPattern.Core\pub-sub-pattern-poc.csproj" />
   </ItemGroup>
 
 </Project> 
