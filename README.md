@@ -220,13 +220,12 @@ dotnet test
    - Support for event schema evolution
    - Backward compatibility handling
 
-## Future Improvements
-
-
-1. **Event Filtering and Routing**
+6. **Event Filtering and Routing**
    - Add support for event filtering
    - Implement event routing based on criteria
    - Support for event transformation
+
+## Future Improvements
 
 2. **Monitoring and Metrics**
    - Add performance metrics
