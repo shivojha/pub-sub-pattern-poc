@@ -225,14 +225,13 @@ dotnet test
    - Implement event routing based on criteria
    - Support for event transformation
 
-## Future Improvements
-
-2. **Monitoring and Metrics**
+7. **Monitoring and Metrics**
    - Add performance metrics
    - Track event processing times
    - Monitor handler success/failure rates
 
-3. **Persistence**
+## Future Improvements
+1. **Persistence**
    - Add event persistence for audit trail
    - Support for event replay
    - Event store integration
