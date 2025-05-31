@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using System.Linq; // Added for LINQ extension methods
+using System.Diagnostics; // Added for Stopwatch
 
 public class EventAggregator : IEventAggregator
 {
@@ -101,21 +102,53 @@ public class EventAggregator : IEventAggregator
             {
                  foreach (var handlerWithDetails in relevantHandlers)
                  {
+                     var handlerType = handlerWithDetails.Handler.Method.DeclaringType?.Name ?? "UnknownHandler";
+                     var stopwatch = new Stopwatch();
+                     stopwatch.Start();
+
                      try
                      {
                          if (handlerWithDetails.Handler is Action<T> action)
                          {
-                             tasks.Add(Task.Run(() => action(eventMessage)));
+                             tasks.Add(Task.Run(() => action(eventMessage)).ContinueWith(t => 
+                             {
+                                 stopwatch.Stop();
+                                 if (t.IsCompletedSuccessfully)
+                                 {
+                                     _logger.LogInformation("Handler {HandlerType} successfully processed event {EventType} (version {EventVersion}) in {Elapsed} ms", 
+                                         handlerType, eventType.Name, eventMessage.Version, stopwatch.ElapsedMilliseconds);
+                                 }
+                                 else if (t.IsFaulted)
+                                 {
+                                     _logger.LogError(t.Exception, "Handler {HandlerType} failed to process event {EventType} (version {EventVersion}) after {Elapsed} ms", 
+                                         handlerType, eventType.Name, eventMessage.Version, stopwatch.ElapsedMilliseconds);
+                                 }
+                             }));
                          }
                          // Handle handlers subscribed to BaseEvent but receiving a derived type
                          else if (handlerWithDetails.Handler is Action<BaseEvent> baseAction && eventMessage is BaseEvent)
                          {
-                              tasks.Add(Task.Run(() => baseAction(eventMessage)));
+                              tasks.Add(Task.Run(() => baseAction(eventMessage)).ContinueWith(t =>
+                              {
+                                   stopwatch.Stop();
+                                   if (t.IsCompletedSuccessfully)
+                                   {
+                                       _logger.LogInformation("Handler {HandlerType} successfully processed event {EventType} (version {EventVersion}) in {Elapsed} ms", 
+                                           handlerType, eventType.Name, eventMessage.Version, stopwatch.ElapsedMilliseconds);
+                                   }
+                                   else if (t.IsFaulted)
+                                   {
+                                       _logger.LogError(t.Exception, "Handler {HandlerType} failed to process event {EventType} (version {EventVersion}) after {Elapsed} ms", 
+                                           handlerType, eventType.Name, eventMessage.Version, stopwatch.ElapsedMilliseconds);
+                                   }
+                              }));
                          }
                      }
                      catch (Exception ex)
                      {
-                         _logger.LogError(ex, "Error publishing event {EventType} (version {EventVersion}) to handler", eventType.Name, eventMessage.Version);
+                         stopwatch.Stop(); // Ensure stopwatch is stopped even if starting the task throws
+                         _logger.LogError(ex, "Error starting task for handler {HandlerType} processing event {EventType} (version {EventVersion}) after {Elapsed} ms", 
+                             handlerType, eventType.Name, eventMessage.Version, stopwatch.ElapsedMilliseconds);
                      }
                  }
                 await Task.WhenAll(tasks);
@@ -123,39 +156,44 @@ public class EventAggregator : IEventAggregator
         }
 
         // Apply transformations and publish transformed events
-        List<(Type TargetType, object Transformer)> transformersForSourceType;
+        List<(Type TargetType, object Transformer)> transformersForSourceType = null;
         lock (_lock)
         {
-            if (_transformers.TryGetValue(eventType, out transformersForSourceType))
+            if (_transformers.TryGetValue(eventType, out var foundTransformers))
             {
-                foreach (var transformerDetail in transformersForSourceType)
+                transformersForSourceType = new List<(Type TargetType, object Transformer)>(foundTransformers);
+            }
+        }
+
+        if (transformersForSourceType != null)
+        {
+            foreach (var transformerDetail in transformersForSourceType)
+            {
+                try
                 {
-                    try
-                    {
-                        // Assuming the transformer is Func<T, TTarget>
-                        var transformer = transformerDetail.Transformer;
-                        var targetType = transformerDetail.TargetType;
+                    // Assuming the transformer is Func<T, TTarget>
+                    var transformer = transformerDetail.Transformer;
+                    var targetType = transformerDetail.TargetType;
 
-                        // Use dynamic to invoke the generic transformer with the correct types
-                        dynamic dynamicTransformer = transformer;
-                        dynamic transformedEvent = dynamicTransformer((dynamic)eventMessage);
+                    // Use dynamic to invoke the generic transformer with the correct types
+                    dynamic dynamicTransformer = transformer;
+                    dynamic transformedEvent = dynamicTransformer((dynamic)eventMessage);
 
-                        // Recursively publish the transformed event
-                        // Need to cast the transformed event to BaseEvent to call PublishInternalAsync
-                        if (transformedEvent is BaseEvent transformedBaseEvent)
-                        {
-                             _logger.LogInformation("Applying transformation from {SourceType} to {TargetType}", eventType.Name, targetType.Name);
-                             await PublishInternalAsync(transformedBaseEvent, processedTypes);
-                        }
-                        else
-                        {
-                             _logger.LogError("Transformation from {SourceType} resulted in a type {TargetType} that does not inherit from BaseEvent", eventType.Name, targetType.Name);
-                        }
-                    }
-                    catch (Exception ex)
+                    // Recursively publish the transformed event
+                    // Need to cast the transformed event to BaseEvent to call PublishInternalAsync
+                    if (transformedEvent is BaseEvent transformedBaseEvent)
                     {
-                         _logger.LogError(ex, "Error applying transformation from {SourceType}", eventType.Name);
+                         _logger.LogInformation("Applying transformation from {SourceType} to {TargetType}", eventType.Name, targetType.Name);
+                         await PublishInternalAsync(transformedBaseEvent, processedTypes);
                     }
+                    else
+                    {
+                         _logger.LogError("Transformation from {SourceType} resulted in a type {TargetType} that does not inherit from BaseEvent", eventType.Name, targetType.Name);
+                    }
+                }
+                catch (Exception ex)
+                {
+                     _logger.LogError(ex, "Error applying transformation from {SourceType}", eventType.Name);
                 }
             }
         }
