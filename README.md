@@ -156,6 +156,40 @@ The application uses Docker Compose to set up the following services:
    - Depends on EventStoreDB
    - Uses eventstore-network for communication
 
+### Running Containers
+![Docker Containers](docs/Docker-Containers-EventStore%20with%20pub-sub-app.PNG)
+
+The image above shows both containers running:
+- EventStoreDB container
+- PubSub application container
+
+## Event Storage and Monitoring
+
+### EventStoreDB Web Interface
+![EventStore Events List](docs/EventStores-Lits%20Of%20Events.PNG)
+
+The EventStoreDB web interface shows:
+- List of stored events
+- Event metadata
+- Stream information
+
+### Published Events
+![Published Events](docs/EventStoreWithOrderPublishedEvents.PNG)
+
+The image above shows:
+- OrderPlacedEvent (V1)
+- OrderPlacedEventV2 (V2)
+- Event metadata and content
+
+### Application Logs
+![Application Logs](docs/pubsub%20app%20container%20logs.PNG)
+
+The application logs show:
+- Event publishing
+- Event transformation
+- Event handling
+- Any errors or warnings
+
 ## Network Configuration
 
 The services communicate through a dedicated Docker network:
