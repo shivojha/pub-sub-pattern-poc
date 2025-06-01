@@ -11,15 +11,15 @@ services.AddLogging(builder =>
     builder.SetMinimumLevel(LogLevel.Information);
 });
 
+// Get EventStoreDB connection string from environment variable
+var connectionString = Environment.GetEnvironmentVariable("EventStore__ConnectionString") 
+    ?? "esdb://admin:changeit@localhost:2113?tls=false";
+
 // Configure EventStoreDB client
-var eventStoreSettings = new EventStoreClientSettings
-{
-    ConnectivitySettings = new EventStoreClientConnectivitySettings
-    {
-        Address = new Uri("esdb://localhost:2113?tls=false") // Update with your EventStoreDB connection string
-    }
-};
-services.AddSingleton(new EventStoreClient(eventStoreSettings));
+var settings = EventStoreClientSettings.Create(connectionString);
+settings.ConnectivitySettings.Insecure = true;
+
+services.AddSingleton(new EventStoreClient(settings));
 
 // Register services
 services.AddSingleton<IEventAggregator, EventAggregator>();
@@ -74,7 +74,7 @@ try
 
     // Demonstrate event replay
     logger.LogInformation("Starting event replay...");
-    await eventAggregator.ReplayEventsAsync();
+    //await eventAggregator.ReplayEventsAsync();
     logger.LogInformation("Event replay completed.");
 
     logger.LogInformation("End of program execution. Press any key to exit.");

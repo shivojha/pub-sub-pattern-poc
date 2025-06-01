@@ -1,0 +1,10 @@
+bin/
+obj/
+.vscode/
+.gitignore
+*.suo
+*.user
+*.log
+[Ll]ogs/
+temp/
+[Tt]emp/ 

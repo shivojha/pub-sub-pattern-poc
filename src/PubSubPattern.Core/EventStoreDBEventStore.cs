@@ -60,39 +60,43 @@ public class EventStoreDBEventStore : IEventStore
 
     public async IAsyncEnumerable<BaseEvent> ReadEventsAsync(string streamId, long startPosition)
     {
+        var streamName = $"{DefaultStreamPrefix}{streamId}";
+        IAsyncEnumerable<ResolvedEvent> result;
+        
         try
         {
-            var streamName = $"{DefaultStreamPrefix}{streamId}";
-            
-            // Read events from the stream
-            var result = _client.ReadStreamAsync(
+            result = _client.ReadStreamAsync(
                 Direction.Forwards,
                 streamName,
                 StreamPosition.FromInt64(startPosition)
             );
-
-            await foreach (var resolvedEvent in result)
-            {
-                // Deserialize the event
-                var eventType = Type.GetType(resolvedEvent.Event.EventType);
-                if (eventType != null && typeof(BaseEvent).IsAssignableFrom(eventType))
-                {
-                    var @event = JsonSerializer.Deserialize(
-                        resolvedEvent.Event.Data.Span,
-                        eventType
-                    ) as BaseEvent;
-
-                    if (@event != null)
-                    {
-                        yield return @event;
-                    }
-                }
-            }
+        }
+        catch (StreamNotFoundException)
+        {
+            _logger.LogInformation("Stream {StreamName} does not exist yet. No events to replay.", streamName);
+            yield break;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error reading events from stream {StreamId}", streamId);
             throw;
+        }
+
+        await foreach (var resolvedEvent in result)
+        {
+            var eventType = Type.GetType(resolvedEvent.Event.EventType);
+            if (eventType != null && typeof(BaseEvent).IsAssignableFrom(eventType))
+            {
+                var @event = JsonSerializer.Deserialize(
+                    resolvedEvent.Event.Data.Span,
+                    eventType
+                ) as BaseEvent;
+
+                if (@event != null)
+                {
+                    yield return @event;
+                }
+            }
         }
     }
 }

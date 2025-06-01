@@ -1,285 +1,408 @@
-# Production-Ready Pub-Sub Pattern Implementation
+# Pub-Sub Pattern POC
 
-This project demonstrates a production-ready implementation of the Publish-Subscribe (Pub-Sub) pattern in C#. The implementation includes features like thread safety, async support, dependency injection, logging, and error handling.
-
-## Architecture
-
-### High-Level Architecture
-```mermaid
-graph TD
-    A[Publisher] -->|Publishes Event| B[EventAggregator]
-    B -->|Notifies| C[Subscriber 1]
-    B -->|Notifies| D[Subscriber 2]
-    B -->|Notifies| E[Subscriber N]
-    
-    style A fill:#f9f,stroke:#333,stroke-width:2px
-    style B fill:#bbf,stroke:#333,stroke-width:2px
-    style C fill:#bfb,stroke:#333,stroke-width:2px
-    style D fill:#bfb,stroke:#333,stroke-width:2px
-    style E fill:#bfb,stroke:#333,stroke-width:2px
-```
-
-### Component Diagram
-```mermaid
-classDiagram
-    class IEventAggregator {
-        +Subscribe<T>(Action<T>)
-        +PublishAsync<T>(T)
-        +Unsubscribe<T>(Action<T>)
-        +RegisterTransformer<TS, TT>(Func<TS, TT>)
-        +ReplayEventsAsync()
-    }
-    
-    class EventAggregator {
-        -ILogger _logger
-        -Dictionary _subscriptions
-        -Dictionary _transformers
-        -IEventStore _eventStore
-        +EventAggregator(ILogger, IEventStore)
-        +Subscribe<T>(Action<T>)
-        +PublishAsync<T>(T)
-        +Unsubscribe<T>(Action<T>)
-        +RegisterTransformer<TS, TT>(Func<TS, TT>)
-        +ReplayEventsAsync()
-    }
-    
-    class IEventHandler~T~ {
-        <<interface>>
-        +HandleAsync(T)
-    }
-    
-    class BaseEvent {
-        <<abstract>>
-        +int Version
-    }
-
-    class OrderPlacedEvent
-    class OrderPlacedEventV2
-
-    class IEventStore {
-        <<interface>>
-        +AppendAsync(BaseEvent)
-        +ReadEventsAsync(string, long)
-    }
-
-    class InMemoryEventStore {
-        +AppendAsync(BaseEvent)
-        +ReadEventsAsync(string, long)
-    }
-    
-    IEventAggregator <|.. EventAggregator
-    IEventHandler <|.. OrderPlacedEventHandler
-    IEventHandler <|.. OrderPlacedEventHandler2
-    BaseEvent <|-- OrderPlacedEvent
-    BaseEvent <|-- OrderPlacedEventV2
-    EventAggregator --> IEventStore : depends on
-    IEventStore <|.. InMemoryEventStore
-```
+This project demonstrates a robust implementation of the Publish-Subscribe pattern in .NET, featuring event versioning, transformation, and persistence using EventStoreDB.
 
 ## Features
 
-- **Thread Safety**: Thread-safe operations for concurrent subscriptions and publications
-- **Async Support**: Full async/await support for event handling
-- **Dependency Injection**: Integration with Microsoft.Extensions.DependencyInjection
-- **Logging**: Comprehensive logging using Microsoft.Extensions.Logging
-- **Error Handling**: Robust error handling and exception management
-- **Interface-based Design**: Clean interfaces for better testability and maintainability
-- **Event Versioning**: Support for event schema evolution and backward compatibility
-- **Event Filtering and Routing**: Route events to specific handlers based on criteria
-- **Event Transformation**: Transform events from one version/type to another
-- **Monitoring and Metrics**: Basic tracking of handler execution time and success/failure
+- **Event Versioning**: Support for multiple versions of events with automatic transformation
+- **Event Persistence**: Events are stored in EventStoreDB for durability and replay capabilities
+- **Flexible Subscriptions**: Subscribe to events with version-specific filters
+- **Event Transformation**: Automatic transformation between event versions
+- **Docker Support**: Easy deployment with Docker and Docker Compose
+
+## Architecture
+
+```mermaid
+graph TD
+    A[Publisher] -->|Publishes Events| B[EventAggregator]
+    B -->|Transforms Events| C[Event Transformers]
+    B -->|Stores Events| D[EventStoreDB]
+    B -->|Routes Events| E[Event Handlers]
+    E -->|Handles Events| F[OrderPlacedEventHandler]
+    E -->|Handles Events| G[OrderPlacedEventHandler2]
+    D -->|Replays Events| B
+```
+
+## Components
+
+1. **EventAggregator**: Central hub for event publishing and subscription
+   - Manages event subscriptions
+   - Handles event transformation
+   - Routes events to appropriate handlers
+   - Persists events to EventStoreDB
+
+2. **EventStoreDB**: Event store for persistence
+   - Stores all events in an append-only log
+   - Enables event replay
+   - Provides durability and consistency
+
+3. **Event Handlers**: Process specific event types
+   - OrderPlacedEventHandler: Handles OrderPlacedEventV2 with USA shipping addresses
+   - OrderPlacedEventHandler2: Handles OrderPlacedEvent V1 with specific OrderId
+
+4. **Event Transformers**: Convert between event versions
+   - Transforms OrderPlacedEvent (V1) to OrderPlacedEventV2 (V2)
+   - Adds default shipping address for V1 events
+
+## Event Flow
+
+1. Publisher creates and publishes an event
+2. EventAggregator receives the event
+3. Event is transformed if necessary (e.g., V1 to V2)
+4. Event is stored in EventStoreDB
+5. Event is routed to subscribed handlers based on filters
+6. Handlers process the event according to their logic
+
+## Event Flow Sequence
+
+```mermaid
+sequenceDiagram
+    participant P as Publisher
+    participant EA as EventAggregator
+    participant ET as Event Transformer
+    participant ES as EventStoreDB
+    participant H as Event Handler
+
+    P->>EA: Publish Event V1
+    EA->>ET: Transform Event
+    ET-->>EA: Return Event V2
+    EA->>ES: Store Event
+    ES-->>EA: Confirm Storage
+    EA->>H: Route Event
+    H-->>EA: Process Complete
+```
 
 ## Getting Started
 
 ### Prerequisites
 
-- .NET 10.0 SDK or later
-- Visual Studio 2022 or later (recommended)
+- .NET 8.0 SDK
+- Docker and Docker Compose
+- EventStoreDB (included in Docker setup)
 
-### Installation
+### Running the Application
 
 1. Clone the repository
-2. Open the solution in Visual Studio
-3. Restore NuGet packages
-4. Build the solution
+2. Navigate to the project directory
+3. Run the application using Docker Compose:
 
-### Usage Examples
-
-#### 1. Basic Event Publishing and Subscription
-
-```csharp
-// Create event
-var orderEvent = new OrderPlacedEvent("12345", "C001", DateTime.Now);
-
-// Subscribe to event
-eventAggregator.Subscribe<OrderPlacedEvent>(async @event => 
-    await handler.HandleAsync(@event));
-
-// Publish event
-await eventAggregator.PublishAsync(orderEvent);
-```
-
-#### 2. Multiple Subscribers
-
-```csharp
-// Subscribe multiple handlers
-eventAggregator.Subscribe<BaseEvent>(async @event => 
-    await handler1.HandleAsync(@event));
-eventAggregator.Subscribe<BaseEvent>(async @event => 
-    await handler2.HandleAsync(@event));
-
-// All handlers interested in BaseEvent will be notified when event is published
-await eventAggregator.PublishAsync(orderEvent);
-```
-
-#### 3. Dependency Injection Setup
-
-```csharp
-var services = new ServiceCollection();
-
-// Configure logging
-services.AddLogging(builder =>
-{
-    builder.AddConsole();
-    builder.SetMinimumLevel(LogLevel.Information);
-});
-
-// Register services
-services.AddSingleton<IEventAggregator, EventAggregator>();
-services.AddTransient<OrderPlacedEventHandler>();
-services.AddTransient<OrderPlacedEventHandler2>();
-// Register event store implementation
-services.AddSingleton<IEventStore, InMemoryEventStore>();
-```
-
-## Persistence with Event Store
-
-For a production-ready system, persisting events to a dedicated event store is crucial for auditability, reliability, and advanced features like event replay and event sourcing.
-
-### Approach
-
-This implementation can be extended to integrate with an event store by introducing an `IEventStore` interface and a concrete implementation that interacts with the chosen event store technology (e.g., EventStoreDB, Kafka, or a file-based store for simpler scenarios). The `EventAggregator` will be modified to use this `IEventStore` to persist events before dispatching them to handlers and to read events from the store for replay.
-
-### Benefits
-
-Integrating a dedicated event store provides several key benefits:
-
-*   **Durable Audit Trail:** Events are stored reliably as an immutable log, providing a complete history of everything that happened in the system.
-*   **Event Replay:** Enables re-processing of past events for debugging, state rebuilding, or projections.
-*   **Decoupling:** Decouples the event processing logic from the storage mechanism.
-*   **Scalability and Performance:** Dedicated event stores are optimized for high-volume event ingestion and querying.
-*   **Support for Event Sourcing:** Forms the foundation for implementing event sourcing patterns.
-
-## Unit Testing
-
-The project includes comprehensive unit tests using MSTest and Moq. The tests cover:
-
-### EventAggregator Tests
-- Subscription validation
-- Event publishing
-- Multiple subscriber handling
-- Error handling and logging
-- Unsubscription functionality
-- Event versioning and filtering
-- Event transformation
-- Event replay (using a mock event store)
-
-Example test:
-```csharp
-[TestMethod]
-public async Task PublishAsync_WithMultipleSubscribers_CallsAllSubscribers()
-{
-    // Arrange
-    var orderEvent = new OrderPlacedEvent("123", "C001", DateTime.Now);
-    var action1Called = false;
-    var action2Called = false;
-
-    _eventAggregator.Subscribe<OrderPlacedEvent>(_ => action1Called = true);
-    _eventAggregator.Subscribe<OrderPlacedEvent>(_ => action2Called = true);
-
-    // Act
-    await _eventAggregator.PublishAsync(orderEvent);
-
-    // Assert
-    Assert.IsTrue(action1Called);
-    Assert.IsTrue(action2Called);
-}
-```
-
-### EventHandler Tests
-- Event processing
-- Error handling
-- Logging verification
-- Null event handling
-- Handling different event versions
-
-Example test:
-```csharp
-[TestMethod]
-public async Task HandleAsync_WithValidEvent_ProcessesSuccessfully()
-{
-    // Arrange
-    var orderEvent = new OrderPlacedEvent("123", "C001", DateTime.Now);
-
-    // Act
-    await _handler.HandleAsync(orderEvent);
-
-    // Assert
-    _loggerMock.Verify(
-        x => x.Log(
-            LogLevel.Information,
-            It.IsAny<EventId>(),
-            It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("Processing order placed event")),
-            It.IsAny<Exception>(),
-            It.IsAny<Func<It.IsAnyType, Exception, string>>()),
-        Times.Once);
-}
-```
-
-### Running Tests
 ```bash
-dotnet test
+docker compose up --build
 ```
 
-## Best Practices
+The application will start and:
+- Initialize EventStoreDB
+- Set up event subscriptions
+- Publish sample events
+- Demonstrate event transformation and handling
 
-1. **Event Design**
-   - Keep events immutable
-   - Include all necessary data for handlers
-   - Use meaningful event names
+### Configuration
 
-2. **Handler Implementation**
-   - Make handlers idempotent when possible
-   - Handle exceptions appropriately
-   - Use async/await for I/O operations
+The application uses the following configuration:
 
-3. **Error Handling**
-   - Log all errors
-   - Implement retry policies for transient failures
-   - Consider dead letter queues for failed events
+- EventStoreDB connection: `esdb://admin:changeit@eventstore:2113?tls=false`
+- HTTP port: 5000
+- EventStoreDB ports: 2113 (HTTP), 1113 (TCP)
 
-4. **Performance**
-   - Use async operations for I/O-bound work
-   - Consider handler execution time
-   - Monitor memory usage
+## Event Examples
 
-## Future Improvements
-*(Moved the Persistence points to a new section)*
+### Version 1 Event
+```csharp
+var orderEventV1 = new OrderPlacedEvent("12345", "C001", DateTime.Now);
+```
 
-## Contributing
+### Version 2 Event
+```csharp
+var orderEventV2 = new OrderPlacedEventV2("67890", "C002", DateTime.UtcNow, "123 Main St, Anytown, USA");
+```
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+## Event Handlers
 
-## License
+### Handler 1
+- Subscribes to OrderPlacedEventV2
+- Filters for events with USA shipping addresses
+- Processes events with shipping information
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+### Handler 2
+- Subscribes to OrderPlacedEvent V1
+- Filters for events with OrderId "12345"
+- Processes basic order information
 
-## Acknowledgments
+## Event Transformation
 
-- Microsoft.Extensions.DependencyInjection
-- Microsoft.Extensions.Logging
-- The .NET community for best practices and patterns 
+The system automatically transforms V1 events to V2 by adding a default shipping address:
+
+```csharp
+eventAggregator.RegisterTransformer<OrderPlacedEvent, OrderPlacedEventV2>(eventV1 => 
+    new OrderPlacedEventV2(eventV1.OrderId, eventV1.CustomerId, eventV1.OrderDate, "Unknown Address"));
+```
+
+## Docker Configuration
+
+The application uses Docker Compose to set up the following services:
+
+1. **EventStoreDB**
+   - Image: eventstore/eventstore:22.10.1-buster-slim
+   - Ports: 2113 (HTTP), 1113 (TCP)
+   - Configuration:
+     - Single node cluster
+     - Insecure mode (no TLS)
+     - Enabled projections
+     - Gossip on single node
+
+2. **PubSub Application**
+   - .NET 8.0 application
+   - Port: 5000
+   - Depends on EventStoreDB
+   - Uses eventstore-network for communication
+
+## Network Configuration
+
+The services communicate through a dedicated Docker network:
+- Network name: eventstore-network
+- Driver: bridge
+- Services:
+  - eventstore (EventStoreDB)
+  - pubsub-app (Application)
+
+## Health Checks
+
+EventStoreDB includes a health check to ensure it's ready before the application starts:
+- Endpoint: http://localhost:2113/health/live
+- Interval: 10s
+- Timeout: 5s
+- Retries: 5
+
+## Detailed EventStoreDB Configuration
+
+### Connection Settings
+```csharp
+var settings = EventStoreClientSettings.Create(connectionString);
+settings.ConnectivitySettings.Insecure = true;
+```
+
+### Docker Environment Variables
+```yaml
+environment:
+  - EVENTSTORE_CLUSTER_SIZE=1
+  - EVENTSTORE_RUN_PROJECTIONS=All
+  - EVENTSTORE_START_STANDARD_PROJECTIONS=true
+  - EVENTSTORE_INSECURE=true
+  - EVENTSTORE_ENABLE_EXTERNAL_TCP=true
+  - EVENTSTORE_ENABLE_ATOM_PUB_OVER_HTTP=true
+  - EVENTSTORE_EXT_TCP_PORT=1113
+  - EVENTSTORE_HTTP_PORT=2113
+  - EVENTSTORE_DISCOVER_VIA_DNS=false
+  - EVENTSTORE_GOSSIP_ON_SINGLE_NODE=true
+```
+
+### Event Storage
+- Events are stored in an append-only log
+- Each event is stored with metadata including:
+  - Event type
+  - Version
+  - Timestamp
+  - Stream name
+  - Event number
+
+### Stream Configuration
+- Global stream: `pubsub-global-stream`
+- Event format: JSON
+- Metadata: Event type and version information
+
+## Advanced Troubleshooting
+
+### 1. Connection Issues
+
+#### Symptoms
+- `Grpc.Core.RpcException: Status(StatusCode="DeadlineExceeded")`
+- `Failed to discover candidate in 10 attempts`
+- Connection refused errors
+
+#### Solutions
+1. Check EventStoreDB container status:
+   ```bash
+   docker compose ps eventstore
+   ```
+
+2. Verify network connectivity:
+   ```bash
+   docker network inspect pub-sub-pattern-poc_eventstore-network
+   ```
+
+3. Test EventStoreDB health:
+   ```bash
+   curl http://localhost:2113/health/live
+   ```
+
+4. Check DNS resolution:
+   ```bash
+   docker exec pubsub-app ping eventstore
+   ```
+
+### 2. Event Storage Issues
+
+#### Symptoms
+- Events not being stored
+- Stream not found errors
+- Append failures
+
+#### Solutions
+1. Verify stream existence:
+   ```bash
+   curl http://localhost:2113/streams/pubsub-global-stream
+   ```
+
+2. Check event store logs:
+   ```bash
+   docker compose logs eventstore
+   ```
+
+3. Verify permissions:
+   ```bash
+   curl -u admin:changeit http://localhost:2113/streams/pubsub-global-stream
+   ```
+
+### 3. Performance Issues
+
+#### Symptoms
+- Slow event processing
+- High latency
+- Connection timeouts
+
+#### Solutions
+1. Monitor EventStoreDB metrics:
+   ```bash
+   curl http://localhost:2113/stats
+   ```
+
+2. Check system resources:
+   ```bash
+   docker stats eventstore
+   ```
+
+3. Verify network performance:
+   ```bash
+   docker exec pubsub-app ping -c 10 eventstore
+   ```
+
+## Network Configuration Details
+
+### Docker Network Setup
+```yaml
+networks:
+  eventstore-network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16
+```
+
+### Service Network Configuration
+```yaml
+services:
+  eventstore:
+    networks:
+      eventstore-network:
+        aliases:
+          - eventstore
+  pubsub-app:
+    networks:
+      eventstore-network:
+        aliases:
+          - pubsub-app
+```
+
+### Port Mappings
+- EventStoreDB HTTP: 2113
+- EventStoreDB TCP: 1113
+- Application: 5000
+
+### Network Security
+- Internal communication over bridge network
+- No external access to EventStoreDB
+- Application exposed on port 5000
+
+## Monitoring and Maintenance
+
+### Health Checks
+```yaml
+healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:2113/health/live"]
+  interval: 10s
+  timeout: 5s
+  retries: 5
+```
+
+### Logging
+- EventStoreDB logs: `/var/log/eventstore`
+- Application logs: Docker container logs
+- Access logs: HTTP endpoints
+
+### Backup and Recovery
+1. Backup EventStoreDB data:
+   ```bash
+   docker cp eventstore:/var/lib/eventstore ./backup
+   ```
+
+2. Restore from backup:
+   ```bash
+   docker cp ./backup eventstore:/var/lib/eventstore
+   ```
+
+### Performance Tuning
+1. EventStoreDB settings:
+   - Chunk size: 268435456 bytes
+   - Cached chunks: -1 (auto)
+   - Max append size: 1048576 bytes
+
+2. Application settings:
+   - Connection timeout: 10 seconds
+   - Retry attempts: 3
+   - Batch size: 100 events
+
+## Development Workflow
+
+### Local Development
+1. Start services:
+   ```bash
+   docker compose up -d
+   ```
+
+2. Monitor logs:
+   ```bash
+   docker compose logs -f
+   ```
+
+3. Rebuild application:
+   ```bash
+   docker compose up --build pubsub-app
+   ```
+
+### Testing
+1. Unit tests:
+   ```bash
+   dotnet test
+   ```
+
+2. Integration tests:
+   ```bash
+   docker compose -f docker-compose.test.yml up
+   ```
+
+### Deployment
+1. Build images:
+   ```bash
+   docker compose build
+   ```
+
+2. Push images:
+   ```bash
+   docker compose push
+   ```
+
+3. Deploy:
+   ```bash
+   docker compose up -d
+   ``` 
